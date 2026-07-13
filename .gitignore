@@ -1,0 +1,29 @@
+# Build artifacts
+/build/
+*.o
+*.obj
+*.exe
+*.out
+
+# CMake / Make
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.cmake
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs and local runtime data
+logs/
+*.log
+*.csv
+
+# OS files
+.DS_Store
+Thumbs.db
