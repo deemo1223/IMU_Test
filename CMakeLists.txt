@@ -8,6 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(Eigen3 REQUIRED)
 
 add_library(imu_can
+    src/can_interface.cpp
     IMU/IMU_can.cpp
 )
 
@@ -18,7 +19,7 @@ target_include_directories(imu_can
         ${CMAKE_CURRENT_SOURCE_DIR}/include/math
 )
 
-target_link_libraries(imu_can PUBLIC pthread Eigen3::Eigen)
+target_link_libraries(imu_can PUBLIC Eigen3::Eigen)
 
 add_executable(imu_reader
     src/main.cpp
