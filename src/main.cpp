@@ -22,6 +22,7 @@ struct CommandLineOptions {
 };
 
 constexpr int kReadTimeoutMs = 5;
+constexpr auto kPrintPeriod = std::chrono::milliseconds(100);
 
 std::atomic<bool> g_running{true};
 
@@ -134,7 +135,7 @@ int main(int argc, char* argv[])
         IMU_can imu;
 
         auto last_diag_time = std::chrono::steady_clock::now();
-        uint64_t last_update_count = 0;
+        auto last_print_time = std::chrono::steady_clock::now();
 
         while (g_running) {
             const bool received_any = pump_can_frames(can, imu);
@@ -161,14 +162,14 @@ int main(int argc, char* argv[])
                 continue;
             }
 
-            const uint64_t update_count = imu.get_update_count(options.sensor_id);
-            if (update_count == last_update_count) {
+            const auto now = std::chrono::steady_clock::now();
+            if (now - last_print_time < kPrintPeriod) {
                 if (!received_any) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(20));
                 }
                 continue;
             }
-            last_update_count = update_count;
+            last_print_time = now;
 
             const imu_data data = imu.get_imu_data(options.sensor_id);
             std::printf("IMU%d rpy[deg]=(%.4f, %.4f, %.4f)\n",

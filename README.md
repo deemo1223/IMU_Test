@@ -35,4 +35,4 @@ Use `--can` or `--can0`/`--can1` style flags to select the CAN interface, and `-
 
 Printed data:
 
-- `rpy[deg]`: decoded roll, pitch, yaw angles for the selected IMU, printed whenever a new sample arrives.
+- `rpy[deg]`: decoded roll, pitch, yaw angles for the selected IMU, printed every 100 ms using the latest received sample.
