@@ -2,10 +2,10 @@
 
 Standalone C++ CAN IMU reader migrated from `centaur_ws`.
 
-The code now follows the same separation used in `BRT_test`:
+The code now follows a small split:
 - `CANInterface`: SocketCAN transport and Linux interface setup.
 - `IMU_can`: passive IMU CAN frame decoding and per-device state tracking.
-- `imu_reader`: minimal single-IMU monitor that prints roll, pitch, and yaw.
+- `imu_reader`: minimal single-IMU monitor hard-coded to `can0` and sensor `0`.
 
 ## Build
 
@@ -27,12 +27,10 @@ cmake --build build
 
 ```bash
 ./build/imu_reader
-./build/imu_reader --can can0 --sensor-id 3
-./build/imu_reader --can1 --bitrate 1000000 --sensorID3
 ```
 
-Use `--can` or `--can0`/`--can1` style flags to select the CAN interface, and `--sensor-id` or `--sensorID` to select the IMU id from `1..4`. The defaults are `can0`, `1000000`, and sensor `3`.
+The current `main.cpp` is hard-coded to read from `can0` at `1000000` bps and print data for sensor `0`.
 
 Printed data:
 
-- `rpy[deg]`: decoded roll, pitch, yaw angles for the selected IMU, printed every 100 ms using the latest received sample.
+- `rpy[deg]`: decoded roll, pitch, yaw angles for sensor `0`, printed every 100 ms using the latest received sample.

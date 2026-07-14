@@ -5,7 +5,6 @@
 namespace
 {
 constexpr int kLegacyRpyBaseId = 1;
-constexpr int kLegacyRpyFrameCount = 3;
 constexpr int kLegacyFrameBlockSize = 3;
 
 constexpr uint32_t kQuatCanIds[] = {33, 34, 0x40, 36};
@@ -14,11 +13,13 @@ constexpr uint32_t kFreeAccCanIds[] = {0x35, 0x36, 0x37, 0x38};
 
 IMU_can::IMU_can() = default;
 
+// Accept one CAN frame, classify it, and fold its payload into cached IMU state.
 bool IMU_can::process_frame(uint32_t can_id, const std::vector<uint8_t>& data)
 {
     ++received_frame_count_;
     last_can_id_ = static_cast<int>(can_id);
 
+    // First classify the incoming frame, then update only the matching sensor state.
     int imu_index = -1;
     int data_index = -1;
     if (!match_frame(can_id, imu_index, data_index)) {
@@ -36,55 +37,67 @@ bool IMU_can::process_frame(uint32_t can_id, const std::vector<uint8_t>& data)
     return true;
 }
 
+// Return the latest decoded sample for one sensor id.
 imu_data IMU_can::get_imu_data(int imu_id) const
 {
-    return get_sensor_or_throw(imu_id).data;
+    const SensorState* sensor = find_sensor(imu_id);
+    if (sensor == nullptr) {
+        throw std::out_of_range("imu_id not available");
+    }
+    return sensor->data;
 }
 
+// Report whether the sensor has received the frame types needed for RPY output.
 bool IMU_can::is_imu_ready(int imu_id) const
 {
-    if (imu_id < 1 || imu_id > kImuCount) {
+    const SensorState* sensor = find_sensor(imu_id);
+    if (sensor == nullptr) {
         return false;
     }
 
-    const SensorState& sensor = sensors_[imu_id - 1];
-    return sensor.ready_flags[kRpyIndex] &&
-           sensor.ready_flags[kGyroIndex] &&
-           sensor.ready_flags[kAccIndex] &&
-           sensor.ready_flags[kQuatIndex];
+    return sensor->ready_flags[kRpyIndex] &&
+           sensor->ready_flags[kGyroIndex] &&
+           sensor->ready_flags[kAccIndex] &&
+           sensor->ready_flags[kQuatIndex];
 }
 
+// Expose which frame groups have been received as a compact bit mask.
 uint8_t IMU_can::get_ready_mask(int imu_id) const
 {
-    if (imu_id < 1 || imu_id > kImuCount) {
+    const SensorState* sensor = find_sensor(imu_id);
+    if (sensor == nullptr) {
         return 0;
     }
 
-    const SensorState& sensor = sensors_[imu_id - 1];
     uint8_t mask = 0;
     for (int index = 0; index < kFrameTypeCount; ++index) {
-        if (sensor.ready_flags[index]) {
+        if (sensor->ready_flags[index]) {
             mask |= static_cast<uint8_t>(1u << index);
         }
     }
     return mask;
 }
 
+// Return the total number of CAN frames observed by this decoder.
 uint64_t IMU_can::get_received_frame_count() const
 {
     return received_frame_count_;
 }
 
+// Return the most recent CAN id seen on the bus.
 int IMU_can::get_last_can_id() const
 {
     return last_can_id_;
 }
 
+// Return how many accepted updates have been applied to one sensor state.
 uint64_t IMU_can::get_update_count(int imu_id) const
 {
-    return imu_id >= 1 && imu_id <= kImuCount ? sensors_[imu_id - 1].update_count : 0;
+    const SensorState* sensor = find_sensor(imu_id);
+    return sensor == nullptr ? 0 : sensor->update_count;
 }
 
+// Decode the IMU's signed 15-bit fixed-point payload format into float units.
 float IMU_can::decode_signed_15bit(uint8_t high, uint8_t low, float scale)
 {
     const uint8_t sign = high >> 7;
@@ -97,17 +110,19 @@ float IMU_can::decode_signed_15bit(uint8_t high, uint8_t low, float scale)
     return (sign ? -1.0f : 1.0f) * static_cast<float>(magnitude) * scale;
 }
 
+// Map a raw CAN id to a logical sensor index and frame type.
 bool IMU_can::match_frame(uint32_t can_id, int& imu_index, int& data_index)
 {
     if (static_cast<int>(can_id) >= kLegacyRpyBaseId &&
-        static_cast<int>(can_id) < kLegacyRpyBaseId + kImuCount * kLegacyFrameBlockSize) {
+        static_cast<int>(can_id) < kLegacyRpyBaseId +
+                                     static_cast<int>(std::size(kQuatCanIds)) * kLegacyFrameBlockSize) {
         const int zero_based = (static_cast<int>(can_id) - kLegacyRpyBaseId) / kLegacyFrameBlockSize;
         imu_index = zero_based;
         data_index = (static_cast<int>(can_id) - kLegacyRpyBaseId) % kLegacyFrameBlockSize;
         return true;
     }
 
-    for (int index = 0; index < kImuCount; ++index) {
+    for (int index = 0; index < static_cast<int>(std::size(kQuatCanIds)); ++index) {
         if (can_id == kQuatCanIds[index]) {
             imu_index = index;
             data_index = kQuatIndex;
@@ -123,29 +138,30 @@ bool IMU_can::match_frame(uint32_t can_id, int& imu_index, int& data_index)
     return false;
 }
 
+// Return the expected byte length for one logical IMU frame type.
 std::size_t IMU_can::expected_payload_size(int data_index)
 {
     return data_index == kQuatIndex ? 8 : 6;
 }
 
-IMU_can::SensorState& IMU_can::get_sensor_or_throw(int imu_id)
+// Look up mutable cached state for one logical sensor id.
+IMU_can::SensorState* IMU_can::find_sensor(int imu_id)
 {
-    if (imu_id < 1 || imu_id > kImuCount) {
-        throw std::out_of_range("imu_id must be 1..4");
-    }
-    return sensors_[imu_id - 1];
+    const auto it = sensors_.find(imu_id);
+    return it == sensors_.end() ? nullptr : &it->second;
 }
 
-const IMU_can::SensorState& IMU_can::get_sensor_or_throw(int imu_id) const
+// Look up read-only cached state for one logical sensor id.
+const IMU_can::SensorState* IMU_can::find_sensor(int imu_id) const
 {
-    if (imu_id < 1 || imu_id > kImuCount) {
-        throw std::out_of_range("imu_id must be 1..4");
-    }
-    return sensors_[imu_id - 1];
+    const auto it = sensors_.find(imu_id);
+    return it == sensors_.end() ? nullptr : &it->second;
 }
 
+// Decode one typed IMU payload block into the matching fields of the cached sample.
 void IMU_can::parseResponse(SensorState& sensor, int data_index, const std::vector<uint8_t>& data)
 {
+    // Each CAN frame updates one typed block inside the cached IMU sample.
     switch (data_index) {
     case kRpyIndex:
         sensor.data.rpy[0] = decode_signed_15bit(data[0], data[1], 0.0078f);

@@ -1,9 +1,9 @@
 #ifndef IMU_CAN_H_
 #define IMU_CAN_H_
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <unordered_map>
 #include <vector>
 
 #include "imu/dataStructIMU.h"
@@ -11,8 +11,6 @@
 class IMU_can
 {
 public:
-    static constexpr int kImuCount = 4;
-
     IMU_can();
 
     bool process_frame(uint32_t can_id, const std::vector<uint8_t>& data);
@@ -44,11 +42,11 @@ private:
     static bool match_frame(uint32_t can_id, int& imu_index, int& data_index);
     static std::size_t expected_payload_size(int data_index);
 
-    SensorState& get_sensor_or_throw(int imu_id);
-    const SensorState& get_sensor_or_throw(int imu_id) const;
+    SensorState* find_sensor(int imu_id);
+    const SensorState* find_sensor(int imu_id) const;
     void parseResponse(SensorState& sensor, int data_index, const std::vector<uint8_t>& data);
 
-    std::array<SensorState, kImuCount> sensors_{};
+    std::unordered_map<int, SensorState> sensors_;
     uint64_t received_frame_count_ = 0;
     int last_can_id_ = -1;
 };
