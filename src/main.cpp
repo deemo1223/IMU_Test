@@ -1,5 +1,6 @@
 #include "IMU_can.hpp"
 #include "can_interface.hpp"
+#include "math/orientation_tools_modify.h"
 
 #include <atomic>
 #include <chrono>
@@ -85,10 +86,24 @@ int main()
 
             if (now - last_print_time >= kPrintPeriod) {
                 const imu_data data = imu.get_data();
+                Quat<float> quat;
+                quat[0] = data.quat[0];
+                quat[1] = data.quat[1];
+                quat[2] = data.quat[2];
+                quat[3] = data.quat[3];
+                const float quat_norm = quat.norm();
+                if (quat_norm < 1e-6f) {
+                    if (!received_any) {
+                        std::this_thread::sleep_for(kIdleSleep);
+                    }
+                    continue;
+                }
+                quat /= quat_norm;
+                const Vec3<float> rpy_rad = ori_modify::quatToRPY(quat);
                 std::printf("IMU rpy[deg]=(%.4f, %.4f, %.4f)\n",
-                            data.rpy[0],
-                            data.rpy[1],
-                            data.rpy[2]);
+                            ori_modify::rad2deg(rpy_rad[0]),
+                            ori_modify::rad2deg(rpy_rad[1]),
+                            ori_modify::rad2deg(rpy_rad[2]));
                 last_print_time = now;
             } else if (!received_any) {
                 std::this_thread::sleep_for(kIdleSleep);

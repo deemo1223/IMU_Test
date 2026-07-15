@@ -33,10 +33,7 @@ imu_data IMU_can::get_data() const
 // Report whether the required frame groups for a full sample were received.
 bool IMU_can::has_complete_sample() const
 {
-    return state_.received_fields[kRpyIndex] &&
-           state_.received_fields[kGyroIndex] &&
-           state_.received_fields[kAccIndex] &&
-           state_.received_fields[kQuatIndex];
+    return state_.received_fields[kQuatIndex];
 }
 
 // Return a bit mask that shows which frame groups were received.
