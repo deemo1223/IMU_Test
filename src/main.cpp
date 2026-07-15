@@ -14,6 +14,7 @@ namespace
 constexpr const char* kCanInterface = "can0";
 constexpr int kCanBitrate = 1000000;
 constexpr int kReadTimeoutMs = 5;
+constexpr int kMaxFramesPerCycle = 32;
 constexpr auto kPrintPeriod = std::chrono::milliseconds(100);
 constexpr auto kIdleSleep = std::chrono::milliseconds(20);
 
@@ -29,8 +30,8 @@ void signal_handler(int)
 bool pump_can_frames(CANInterface& can, IMU_can& imu)
 {
     bool received_any = false;
-    // Drain the SocketCAN queue so the latest decoded sample stays fresh.
-    while (g_running) {
+    // Process a bounded burst so printing and diagnostics still get CPU time.
+    for (int frame = 0; frame < kMaxFramesPerCycle && g_running; ++frame) {
         uint32_t can_id = 0;
         std::vector<uint8_t> data;
         if (!can.readFrame(can_id, data, kReadTimeoutMs)) {
