@@ -3,51 +3,64 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <unordered_map>
 #include <vector>
 
 #include "imu/dataStructIMU.h"
+#include "math/cTypes.h"
 
 class IMU_can
 {
 public:
+    // Construct an empty single-sensor decoder.
     IMU_can();
 
-    bool process_frame(uint32_t can_id, const std::vector<uint8_t>& data);
+    // Decode one raw CAN frame and merge it into the cached IMU sample.
+    bool handle_frame(uint32_t can_id, const std::vector<uint8_t>& payload);
 
-    imu_data get_imu_data(int imu_id) const;
-    bool is_imu_ready(int imu_id) const;
-    uint8_t get_ready_mask(int imu_id) const;
-    uint64_t get_received_frame_count() const;
+    // Return the latest cached IMU sample.
+    imu_data get_data() const;
+    // Report whether the required frame groups for a full sample were received.
+    bool has_complete_sample() const;
+    // Return a bit mask that shows which frame groups were received.
+    u8 get_received_fields_mask() const;
+    // Return transport-level receive statistics for diagnostics.
+    u64 get_received_frame_count() const;
+    // Return the most recent CAN id seen by the decoder.
     int get_last_can_id() const;
-    uint64_t get_update_count(int imu_id) const;
+    // Return how many accepted frame updates were applied.
+    u64 get_update_count() const;
 
 private:
-    enum DataIndex {
+    enum FieldIndex {
         kRpyIndex = 0,
         kGyroIndex = 1,
         kAccIndex = 2,
         kQuatIndex = 3,
         kFreeAccIndex = 4,
-        kFrameTypeCount = 5
+        kFieldCount = 5
     };
 
-    struct SensorState {
+    struct FieldMapping {
+        uint32_t can_id;
+        int field_index;
+        std::size_t payload_size;
+    };
+
+    struct DecoderState {
         imu_data data{};
-        bool ready_flags[kFrameTypeCount]{};
-        uint64_t update_count = 0;
+        bool received_fields[kFieldCount]{};
+        u64 update_count = 0;
     };
 
-    static float decode_signed_15bit(uint8_t high, uint8_t low, float scale);
-    static bool match_frame(uint32_t can_id, int& imu_index, int& data_index);
-    static std::size_t expected_payload_size(int data_index);
+    // Convert one signed 15-bit fixed-point field into floating-point units.
+    static float decode_value(u8 high, u8 low, float scale);
+    // Look up which field type belongs to a raw CAN id.
+    static const FieldMapping* find_field_mapping(uint32_t can_id);
+    // Decode one typed payload block into the cached sample fields.
+    void decode_payload_block(int field_index, const std::vector<uint8_t>& payload);
 
-    SensorState* find_sensor(int imu_id);
-    const SensorState* find_sensor(int imu_id) const;
-    void parseResponse(SensorState& sensor, int data_index, const std::vector<uint8_t>& data);
-
-    std::unordered_map<int, SensorState> sensors_;
-    uint64_t received_frame_count_ = 0;
+    DecoderState state_{};
+    u64 received_frame_count_ = 0;
     int last_can_id_ = -1;
 };
 

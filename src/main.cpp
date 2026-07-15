@@ -13,7 +13,6 @@ namespace
 {
 constexpr const char* kCanInterface = "can0";
 constexpr int kCanBitrate = 1000000;
-constexpr int kSensorId = 0;
 constexpr int kReadTimeoutMs = 5;
 constexpr auto kPrintPeriod = std::chrono::milliseconds(100);
 constexpr auto kIdleSleep = std::chrono::milliseconds(20);
@@ -39,7 +38,7 @@ bool pump_can_frames(CANInterface& can, IMU_can& imu)
         }
 
         received_any = true;
-        imu.process_frame(can_id, data);
+        imu.handle_frame(can_id, data);
     }
     return received_any;
 }
@@ -63,16 +62,16 @@ int main()
             const bool received_any = pump_can_frames(can, imu);
             const auto now = std::chrono::steady_clock::now();
 
-            if (!imu.is_imu_ready(kSensorId)) {
+            if (!imu.has_complete_sample()) {
                 if (now - last_diag_time >= std::chrono::seconds(1)) {
                     const uint64_t frame_count = imu.get_received_frame_count();
                     const int last_can_id = imu.get_last_can_id();
-                    const uint8_t ready_mask = imu.get_ready_mask(kSensorId);
+                    const uint8_t ready_mask = imu.get_received_fields_mask();
                     if (frame_count == 0) {
                         std::printf("Waiting: no CAN frames received on %s\n", kCanInterface);
                     } else {
-                        std::printf("Waiting: received %lu CAN frames, last id=0x%X, IMU%d ready mask=0x%02X\n",
-                                    frame_count, last_can_id, kSensorId, ready_mask);
+                        std::printf("Waiting: received %lu CAN frames, last id=0x%X, ready mask=0x%02X\n",
+                                    frame_count, last_can_id, ready_mask);
                     }
                     last_diag_time = now;
                 }
@@ -84,9 +83,8 @@ int main()
             }
 
             if (now - last_print_time >= kPrintPeriod) {
-                const imu_data data = imu.get_imu_data(kSensorId);
-                std::printf("IMU%d rpy[deg]=(%.4f, %.4f, %.4f)\n",
-                            kSensorId,
+                const imu_data data = imu.get_data();
+                std::printf("IMU rpy[deg]=(%.4f, %.4f, %.4f)\n",
                             data.rpy[0],
                             data.rpy[1],
                             data.rpy[2]);
