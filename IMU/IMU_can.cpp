@@ -1,16 +1,5 @@
 #include "IMU_can.hpp"
 
-namespace
-{
-constexpr IMU_can::FieldMapping kFieldMappings[] = {
-    {0x001, IMU_can::kRpyIndex, 6},
-    {0x002, IMU_can::kGyroIndex, 6},
-    {0x003, IMU_can::kAccIndex, 6},
-    {0x021, IMU_can::kQuatIndex, 8},
-    {0x035, IMU_can::kFreeAccIndex, 6},
-};
-}
-
 // Construct an empty single-sensor decoder.
 IMU_can::IMU_can() = default;
 
@@ -93,10 +82,23 @@ float IMU_can::decode_value(u8 high, u8 low, float scale)
     return (sign ? -1.0f : 1.0f) * static_cast<float>(magnitude) * scale;
 }
 
+// Return the fixed CAN-id to payload-type mapping for the connected IMU.
+const std::vector<IMU_can::FieldMapping>& IMU_can::field_mappings()
+{
+    static const std::vector<FieldMapping> mappings = {
+        {0x001, kRpyIndex, 6},
+        {0x002, kGyroIndex, 6},
+        {0x003, kAccIndex, 6},
+        {0x021, kQuatIndex, 8},
+        {0x035, kFreeAccIndex, 6},
+    };
+    return mappings;
+}
+
 // Look up which field type belongs to a raw CAN id.
 const IMU_can::FieldMapping* IMU_can::find_field_mapping(uint32_t can_id)
 {
-    for (const FieldMapping& mapping : kFieldMappings) {
+    for (const FieldMapping& mapping : field_mappings()) {
         if (mapping.can_id == can_id) {
             return &mapping;
         }

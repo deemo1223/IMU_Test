@@ -54,6 +54,8 @@ private:
 
     // Convert one signed 15-bit fixed-point field into floating-point units.
     static float decode_value(u8 high, u8 low, float scale);
+    // Return the fixed CAN-id to payload-type mapping for the connected IMU.
+    static const std::vector<FieldMapping>& field_mappings();
     // Look up which field type belongs to a raw CAN id.
     static const FieldMapping* find_field_mapping(uint32_t can_id);
     // Decode one typed payload block into the cached sample fields.
